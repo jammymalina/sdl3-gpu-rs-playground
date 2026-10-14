@@ -1,31 +1,20 @@
 struct VertexInput
 {
-    [[vk::location(0)]]
-    float3 position : POSITION;
-    [[vk::location(1)]]
-    float3 color : COLOR;
+    float x : TEXCOORD0;
+    float y : TEXCOORD1;
+    float z : TEXCOORD2;
 }
 
 struct VertexOutput
 {
-    float4 clip_position : SV_Position;
-    [[vk::location(0)]]
-    float3 color : COLOR;
-}
-
-struct Camera
-{
-    float4x4 view_projection;
-}
-
-[[vk::binding(0, 1)]]
-ConstantBuffer<Camera> camera;
+    float4 Position : SV_Position;
+};
 
 [shader("vertex")]
 VertexOutput main(VertexInput input)
 {
     VertexOutput output;
-    output.clip_position = mul(camera.view_projection, float4(input.position, 1.0));
-    output.color = input.color;
+    output.Position = float4(input.x, input.y, input.z, 1.0f);
+
     return output;
 }

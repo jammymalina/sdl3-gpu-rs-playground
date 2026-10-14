@@ -1,11 +1,17 @@
 struct FragmentInput
 {
-    [[vk::location(0)]]
-    float3 color : COLOR;
 }
 
-[shader("fragment")]
-float4 main(FragmentInput input) : SV_Target
+struct FragmentOutput
 {
-    return float4(input.color, 1.0);
+    float4 Color : SV_Target0;
+};
+
+[shader("fragment")]
+FragmentOutput main(FragmentInput input)
+{
+    FragmentOutput output;
+    output.Color = float4(1.0f, 0.0f, 0.0f, 1.0f); // Solid Red (R=1, G=0, B=0, A=1)
+
+    return output;
 }
