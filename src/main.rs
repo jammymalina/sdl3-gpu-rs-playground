@@ -23,24 +23,38 @@ struct Vertex {
     x: f32,
     y: f32,
     z: f32,
+    r: f32,
+    g: f32,
+    b: f32,
 }
 
+// "Vertex colors": each corner carries a different color and the GPU
+// interpolates them across the triangle, giving the rainbow look.
 const VERTICES: [Vertex; 3] = [
     Vertex {
         x: -0.5,
         y: -0.5,
         z: 0.0,
-    },
+        r: 1.0,
+        g: 0.0,
+        b: 0.0,
+    }, // Bottom-left: red
     Vertex {
         x: 0.5,
         y: -0.5,
         z: 0.0,
-    },
+        r: 0.0,
+        g: 1.0,
+        b: 0.0,
+    }, // Bottom-right: green
     Vertex {
         x: 0.0,
         y: 0.5,
         z: 0.0,
-    },
+        r: 0.0,
+        g: 0.0,
+        b: 1.0,
+    }, // Top-middle: blue
 ];
 
 /// # Errors
@@ -103,6 +117,12 @@ pub fn main() -> anyhow::Result<()> {
             .with_buffer_slot(0)
             .with_format(VertexElementFormat::Float)
             .with_offset(offset_of!(Vertex, z).try_into()?),
+        // r, g and b are contiguous, so a single Float3 attribute covers them.
+        VertexAttribute::new()
+            .with_location(3)
+            .with_buffer_slot(0)
+            .with_format(VertexElementFormat::Float3)
+            .with_offset(offset_of!(Vertex, r).try_into()?),
     ];
 
     let color_target_descriptions =

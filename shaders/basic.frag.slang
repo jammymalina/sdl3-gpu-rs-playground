@@ -1,5 +1,7 @@
 struct FragmentInput
 {
+    [[vk::location(0)]]
+    float3 color : COLOR;
 }
 
 struct FragmentOutput
@@ -11,7 +13,10 @@ struct FragmentOutput
 FragmentOutput main(FragmentInput input)
 {
     FragmentOutput output;
-    output.Color = float4(1.0f, 0.0f, 0.0f, 1.0f); // Solid Red (R=1, G=0, B=0, A=1)
+
+    // The color arriving here is the blend of the triangle's three corner
+    // colors at this pixel, produced by the rasterizer's interpolation.
+    output.Color = float4(input.color, 1.0f);
 
     return output;
 }
