@@ -15,5 +15,8 @@
 //! ```
 
 #![allow(dead_code)]
+// The generated code lives in OUT_DIR and is written by `build.rs`, so the
+// crate's strict clippy lints don't apply to it.
+#![allow(clippy::must_use_candidate, clippy::doc_markdown)]
 
 include!(concat!(env!("OUT_DIR"), "/shaders.rs"));

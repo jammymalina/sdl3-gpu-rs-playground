@@ -1,3 +1,13 @@
+//! Example: the classic rainbow triangle, driven through the library.
+//!
+//! Demonstrates the lowest-level building block the library exposes — the
+//! embedded Slang-compiled shaders (`shaders::BASIC_VERT` / `shaders::BASIC_FRAG`)
+//! — wired into an SDL3 GPU pipeline, vertex buffer, and render loop.
+//!
+//! Run: `cargo run --example rainbow_triangle`
+//! Exit: close the window or press `Esc`.
+
+use std::mem::{offset_of, size_of};
 use std::time::Instant;
 
 use sdl3::event::Event;
@@ -10,54 +20,36 @@ use sdl3::gpu::{
 use sdl3::keyboard::Keycode;
 use sdl3::pixels::Color;
 
-use std::mem::{offset_of, size_of};
-
-// Shaders written in `shaders/*.slang` are compiled to SPIR-V by `build.rs` and
-// embedded here. Use e.g. `shaders::BASIC_VERT` / `shaders::BASIC_FRAG` (or
-// `shaders::get("basic.vert")`) when creating a pipeline.
-mod shaders;
+use sdl3_gpu_rs_playground::shaders;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
-    x: f32,
-    y: f32,
-    z: f32,
-    r: f32,
-    g: f32,
-    b: f32,
+    position: [f32; 3],
+    color: [f32; 3],
 }
 
 // "Vertex colors": each corner carries a different color and the GPU
 // interpolates them across the triangle, giving the rainbow look.
 const VERTICES: [Vertex; 3] = [
     Vertex {
-        x: -0.5,
-        y: -0.5,
-        z: 0.0,
-        r: 1.0,
-        g: 0.0,
-        b: 0.0,
+        position: [-0.5, -0.5, 0.0],
+        color: [1.0, 0.0, 0.0],
     }, // Bottom-left: red
     Vertex {
-        x: 0.5,
-        y: -0.5,
-        z: 0.0,
-        r: 0.0,
-        g: 1.0,
-        b: 0.0,
+        position: [0.5, -0.5, 0.0],
+        color: [0.0, 1.0, 0.0],
     }, // Bottom-right: green
     Vertex {
-        x: 0.0,
-        y: 0.5,
-        z: 0.0,
-        r: 0.0,
-        g: 0.0,
-        b: 1.0,
+        position: [0.0, 0.5, 0.0],
+        color: [0.0, 0.0, 1.0],
     }, // Top-middle: blue
 ];
 
 /// # Errors
+///
+/// Propagates SDL3 initialization, device/pipeline creation, and vertex
+/// upload failures through `anyhow`.
 #[allow(clippy::too_many_lines)]
 pub fn main() -> anyhow::Result<()> {
     const MS_PER_UPDATE: u128 = 16;
@@ -105,24 +97,13 @@ pub fn main() -> anyhow::Result<()> {
         VertexAttribute::new()
             .with_location(0)
             .with_buffer_slot(0)
-            .with_format(VertexElementFormat::Float)
-            .with_offset(offset_of!(Vertex, x).try_into()?),
+            .with_format(VertexElementFormat::Float3)
+            .with_offset(offset_of!(Vertex, position).try_into()?),
         VertexAttribute::new()
             .with_location(1)
             .with_buffer_slot(0)
-            .with_format(VertexElementFormat::Float)
-            .with_offset(offset_of!(Vertex, y).try_into()?),
-        VertexAttribute::new()
-            .with_location(2)
-            .with_buffer_slot(0)
-            .with_format(VertexElementFormat::Float)
-            .with_offset(offset_of!(Vertex, z).try_into()?),
-        // r, g and b are contiguous, so a single Float3 attribute covers them.
-        VertexAttribute::new()
-            .with_location(3)
-            .with_buffer_slot(0)
             .with_format(VertexElementFormat::Float3)
-            .with_offset(offset_of!(Vertex, r).try_into()?),
+            .with_offset(offset_of!(Vertex, color).try_into()?),
     ];
 
     let color_target_descriptions =
