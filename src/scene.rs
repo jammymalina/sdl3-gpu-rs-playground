@@ -6,8 +6,8 @@ use glam::Mat4;
 use slotmap::{SlotMap, new_key_type};
 use thiserror::Error;
 
-use crate::Transform;
 use crate::assets::{MaterialKey, MeshKey};
+use crate::math::Transform;
 
 new_key_type! {
     pub struct NodeKey;

@@ -9,8 +9,9 @@
 
 pub mod assets;
 pub mod camera;
+pub mod geom;
 pub mod math;
+pub mod mesh;
+pub mod render;
 pub mod scene;
 pub mod shaders;
-
-pub use math::Transform;
