@@ -447,24 +447,15 @@ impl PerspectiveCamera {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Floating point equality within `epsilon`.
-    fn close(a: f32, b: f32, epsilon: f32) -> bool {
-        (a - b).abs() < epsilon
-    }
-
-    /// Component-wise [`close`] for vector comparisons.
-    fn close3(a: Vec3, b: Vec3, epsilon: f32) -> bool {
-        close(a.x, b.x, epsilon) && close(a.y, b.y, epsilon) && close(a.z, b.z, epsilon)
-    }
+    use approx::assert_abs_diff_eq;
 
     #[test]
     fn default_perspective_projects_screen_center_between_planes() {
         let camera = PerspectiveCamera::default();
         let clipped = camera.world_to_clip() * Vec3::Z.extend(1.0);
         let ndc = clipped.truncate() / clipped.w;
-        assert!(close(ndc.x, 0.0, 1e-5), "NDC x: {}", ndc.x);
-        assert!(close(ndc.y, 0.0, 1e-5), "NDC y: {}", ndc.y);
+        assert_abs_diff_eq!(ndc.x, 0.0, epsilon = 1e-5);
+        assert_abs_diff_eq!(ndc.y, 0.0, epsilon = 1e-5);
         assert!(
             (0.0..=1.0).contains(&ndc.z),
             "NDC depth outside [0, 1]: {}",
@@ -498,11 +489,7 @@ mod tests {
     fn perspective_set_view_size_adjusts_aspect_ratio() {
         let mut camera = PerspectiveCamera::default();
         camera.set_view_size(16.0, 9.0);
-        assert!(
-            close(camera.config().aspect_ratio, 16.0 / 9.0, 1e-6),
-            "aspect ratio: {}",
-            camera.config().aspect_ratio
-        );
+        assert_abs_diff_eq!(camera.config().aspect_ratio, 16.0 / 9.0, epsilon = 1e-6);
     }
 
     #[test]
@@ -510,33 +497,29 @@ mod tests {
         let mut camera = PerspectiveCamera::default();
         camera.set_view_size(16.0, 9.0);
         camera.set_view_size(0.0, 0.0);
-        assert!(
-            close(camera.config().aspect_ratio, 16.0 / 9.0, 1e-6),
-            "aspect ratio: {}",
-            camera.config().aspect_ratio
-        );
+        assert_abs_diff_eq!(camera.config().aspect_ratio, 16.0 / 9.0, epsilon = 1e-6);
     }
 
     #[test]
     fn identity_transform_forward_is_plus_z() {
         // SDL3 GPU convention: +Z points forward with identity transforms.
-        assert!(close3(
+        assert_abs_diff_eq!(
             OrthographicCamera::default().forward(),
             Vec3::Z,
-            1e-6
-        ));
-        assert!(close3(
+            epsilon = 1e-6
+        );
+        assert_abs_diff_eq!(
             PerspectiveCamera::default().forward(),
             Vec3::Z,
-            1e-6
-        ));
+            epsilon = 1e-6
+        );
     }
 
     #[test]
     fn look_at_tracks_target() {
         let mut camera = OrthographicCamera::default();
         camera.look_at(Vec3::new(5.0, 0.0, 0.0));
-        assert!(close3(camera.forward(), Vec3::X, 1e-5));
+        assert_abs_diff_eq!(camera.forward(), Vec3::X, epsilon = 1e-5);
     }
 
     #[test]
@@ -546,7 +529,7 @@ mod tests {
         // A target at the camera's own position: the degenerate case.
         camera.look_at(camera.transform().position);
         let forward = camera.forward();
-        assert!(close3(forward, Vec3::Z, 1e-5), "forward: {forward:?}");
+        assert_abs_diff_eq!(forward, Vec3::Z, epsilon = 1e-5);
     }
 
     #[test]
@@ -561,6 +544,6 @@ mod tests {
         });
         let focal = |matrix: Mat4| matrix.to_cols_array()[5]; // column 1, row 1
         let ratio = focal(zoomed.projection_matrix()) / focal(wide.projection_matrix());
-        assert!(close(ratio, 2.0, 1e-5), "focal ratio: {ratio}");
+        assert_abs_diff_eq!(ratio, 2.0, epsilon = 1e-5);
     }
 }
