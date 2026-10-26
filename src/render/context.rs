@@ -4,6 +4,8 @@ use sdl3::{
     video::Window,
 };
 
+use crate::render::resource_cache::ResourceCache;
+
 pub struct RenderContextConfig {
     pub title: String,
     pub window_width: u32,
@@ -11,6 +13,8 @@ pub struct RenderContextConfig {
 }
 
 pub struct RenderContext {
+    // Declared first so cached GPU resources drop before the device they belong to.
+    pub resources: ResourceCache,
     pub sdl_context: Sdl,
     pub window: Window,
     pub device: Device,
@@ -43,6 +47,7 @@ impl RenderContext {
         let (width, height) = window.size_in_pixels();
 
         Ok(Self {
+            resources: ResourceCache::default(),
             sdl_context,
             window,
             device,

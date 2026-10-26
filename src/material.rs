@@ -1,16 +1,15 @@
 use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
-use once_cell::sync::OnceCell;
 use sdl3::gpu::{
-    ColorTargetDescription, FillMode, GraphicsPipeline, GraphicsPipelineTargetInfo, PrimitiveType,
-    RasterizerState, ShaderFormat, ShaderStage, VertexAttribute, VertexBufferDescription,
-    VertexElementFormat, VertexInputRate, VertexInputState,
+    ColorTargetDescription, CommandBuffer, FillMode, GraphicsPipeline, GraphicsPipelineTargetInfo,
+    PrimitiveType, RasterizerState, RenderPass, ShaderFormat, ShaderStage, VertexAttribute,
+    VertexBufferDescription, VertexElementFormat, VertexInputRate, VertexInputState,
 };
 use std::mem::{offset_of, size_of};
 
 use crate::{
     mesh::{VertexAttributes, VertexPosition},
-    render::context::RenderContext,
+    render::{context::RenderContext, resource_cache::ResourceId},
     shaders,
 };
 
@@ -25,32 +24,9 @@ struct FlatColorResources {
     pipeline: GraphicsPipeline,
 }
 
-pub enum Material {
-    FlatColor { basic_color: BasicColor },
-}
-
-impl Material {
+impl FlatColorResources {
     /// # Errors
-    pub fn bind(&self, context: &RenderContext) -> anyhow::Result<()> {
-        match self {
-            Self::FlatColor { basic_color } => {
-                static FLAT_RESOURCES: OnceCell<FlatColorResources> = OnceCell::new();
-
-                // Compiled once, shared by every draw rendered with this material.
-                let resources =
-                    FLAT_RESOURCES.get_or_try_init(|| Self::init_flat_color(context))?;
-
-                // TODO: bind `basic_color` (vertex uniform slot 2) and switch
-                // the command buffer over to `resources.pipeline`.
-                let _ = resources;
-                let _ = basic_color;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn init_flat_color(context: &RenderContext) -> anyhow::Result<FlatColorResources> {
+    fn new(context: &RenderContext) -> anyhow::Result<Self> {
         let vertex_buffer_descriptions = [
             // Slot 0: Positions
             VertexBufferDescription::new()
@@ -123,6 +99,36 @@ impl Material {
             )
             .build()?;
 
-        Ok(FlatColorResources { pipeline })
+        Ok(Self { pipeline })
+    }
+}
+
+pub enum Material {
+    FlatColor { basic_color: BasicColor },
+}
+
+impl Material {
+    /// # Errors
+    pub fn bind(
+        &self,
+        context: &RenderContext,
+        command_buffer: &CommandBuffer,
+        render_pass: &RenderPass,
+    ) -> anyhow::Result<()> {
+        match self {
+            Self::FlatColor { basic_color } => {
+                // Built on first use, then shared by every draw using this material type.
+                let resources = context
+                    .resources
+                    .get_or_try_init(ResourceId::MaterialFlatColor, || {
+                        FlatColorResources::new(context)
+                    })?;
+
+                command_buffer.push_vertex_uniform_data(2, basic_color);
+                render_pass.bind_graphics_pipeline(&resources.pipeline);
+            }
+        }
+
+        Ok(())
     }
 }
