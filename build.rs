@@ -123,8 +123,8 @@ fn main() {
     for src in &sources {
         println!("cargo:rerun-if-changed={}", src.display());
 
-        let text =
-            fs::read_to_string(src).unwrap_or_else(|err| panic!("failed to read `{}`: {err}", src.display()));
+        let text = fs::read_to_string(src)
+            .unwrap_or_else(|err| panic!("failed to read `{}`: {err}", src.display()));
         // Module (its file declares no shader stages) - compiled indirectly
         // through the shaders that `import` it.
         let entry_points = entry_points(&text);
@@ -134,7 +134,9 @@ fn main() {
 
         // Key prefix: path below `shaders/` without the `.slang` extension,
         // with `/` separators (e.g. `lights/point_lit`).
-        let rel = src.strip_prefix(&shader_dir).expect("source under SHADER_DIR");
+        let rel = src
+            .strip_prefix(&shader_dir)
+            .expect("source under SHADER_DIR");
         let stem = rel
             .to_string_lossy()
             .strip_suffix(".slang")
@@ -148,7 +150,11 @@ fn main() {
                      Valid stages: {}",
                     src.display(),
                     entry_point.stage,
-                    STAGES.iter().map(|(key, _)| *key).collect::<Vec<_>>().join(", ")
+                    STAGES
+                        .iter()
+                        .map(|(key, _)| *key)
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 );
             };
 
@@ -158,14 +164,24 @@ fn main() {
             if let Some(parent) = out.parent() {
                 fs::create_dir_all(parent).expect("failed to create shader output subdirectory");
             }
-            compile(&slangc, src, &out, stage, &entry_point.name, debug, &shader_dir);
+            compile(
+                &slangc,
+                src,
+                &out,
+                stage,
+                &entry_point.name,
+                debug,
+                &shader_dir,
+            );
 
             // Path is relative to the generated `shaders.rs` (which lives in OUT_DIR).
             compiled.push(Compiled {
                 key: key.clone(),
                 name: stem.clone(),
                 stage,
-                entrypoint: entry_point.name.clone(),
+                // SPIR-V always names the entry point `main`; the Slang function
+                // name is only used to select it at compile time.
+                entrypoint: "main".to_owned(),
                 spv_rel: format!("shaders/{key}.spv"),
             });
         }
@@ -185,18 +201,25 @@ fn main() {
 
 /// Map a `[shader("...")]` stage to its canonical `slangc -stage` value.
 fn stage_from_key(key: &str) -> Option<&'static str> {
-    STAGES.iter().find_map(|(suffix, stage)| (*suffix == key).then_some(*stage))
+    STAGES
+        .iter()
+        .find_map(|(suffix, stage)| (*suffix == key).then_some(*stage))
 }
 
 /// Fail with a clear message if two entry points would generate the same
 /// constant (for example two `[shader("vertex")]` functions in one file).
 fn check_unique_idents(compiled: &[Compiled]) {
-    let mut idents: Vec<(String, &str)> =
-        compiled.iter().map(|c| (ident(&c.key), c.key.as_str())).collect();
+    let mut idents: Vec<(String, &str)> = compiled
+        .iter()
+        .map(|c| (ident(&c.key), c.key.as_str()))
+        .collect();
     idents.sort();
     for pair in idents.windows(2) {
         if pair[0].0 == pair[1].0 {
-            panic!("shader key collision: `{}` overwrites with the same identifier", pair[0].1);
+            panic!(
+                "shader key collision: `{}` overwrites with the same identifier",
+                pair[0].1
+            );
         }
     }
 }
@@ -382,7 +405,15 @@ fn find_slangc() -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
-fn compile(slangc: &Path, src: &Path, out: &Path, stage: &str, entrypoint: &str, debug: bool, include_dir: &Path) {
+fn compile(
+    slangc: &Path,
+    src: &Path,
+    out: &Path,
+    stage: &str,
+    entrypoint: &str,
+    debug: bool,
+    include_dir: &Path,
+) {
     let mut cmd = Command::new(slangc);
     cmd.arg(src)
         // SPIR-V is what the Vulkan backend of SDL3 GPU consumes.
@@ -419,7 +450,10 @@ fn compile(slangc: &Path, src: &Path, out: &Path, stage: &str, entrypoint: &str,
     }
 
     // Surface successful-build diagnostics (e.g. `E39029`) in cargo's output.
-    for line in String::from_utf8_lossy(&output.stderr).lines().filter(|l| !l.trim().is_empty()) {
+    for line in String::from_utf8_lossy(&output.stderr)
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+    {
         println!("cargo:warning={line}");
     }
 }

@@ -1,15 +1,19 @@
 use anyhow::Context;
 use bytemuck::{Pod, Zeroable};
 use sdl3::gpu::{
-    ColorTargetDescription, CommandBuffer, FillMode, GraphicsPipeline, GraphicsPipelineTargetInfo,
-    PrimitiveType, RasterizerState, RenderPass, ShaderFormat, ShaderStage, VertexAttribute,
-    VertexBufferDescription, VertexElementFormat, VertexInputRate, VertexInputState,
+    ColorTargetDescription, CommandBuffer, CompareOp, DepthStencilState, FillMode,
+    GraphicsPipeline, GraphicsPipelineTargetInfo, PrimitiveType, RasterizerState, RenderPass,
+    ShaderFormat, ShaderStage, VertexAttribute, VertexBufferDescription, VertexElementFormat,
+    VertexInputRate, VertexInputState,
 };
 use std::mem::{offset_of, size_of};
 
 use crate::{
     mesh::{VertexAttributes, VertexPosition},
-    render::{context::RenderContext, resource_cache::ResourceId},
+    render::{
+        context::{DEPTH_FORMAT, RenderContext},
+        resource_cache::ResourceId,
+    },
     shaders,
 };
 
@@ -68,6 +72,8 @@ impl FlatColorResources {
             .create_shader()
             .with_code(ShaderFormat::SPIRV, vertex_info.bytes, ShaderStage::Vertex)
             .with_entrypoint(&vertex_info.entrypoint_cstring())
+            // scene (b0), object (b1), color (b2)
+            .with_uniform_buffers(3)
             .build()?;
         let frag_shader = device
             .create_shader()
@@ -93,9 +99,17 @@ impl FlatColorResources {
             )
             .with_primitive_type(PrimitiveType::TriangleList)
             .with_rasterizer_state(RasterizerState::new().with_fill_mode(FillMode::Fill))
+            .with_depth_stencil_state(
+                DepthStencilState::new()
+                    .with_enable_depth_test(true)
+                    .with_enable_depth_write(true)
+                    .with_compare_op(CompareOp::Less),
+            )
             .with_target_info(
                 GraphicsPipelineTargetInfo::new()
-                    .with_color_target_descriptions(&color_target_descriptions),
+                    .with_color_target_descriptions(&color_target_descriptions)
+                    .with_has_depth_stencil_target(true)
+                    .with_depth_stencil_format(DEPTH_FORMAT),
             )
             .build()?;
 

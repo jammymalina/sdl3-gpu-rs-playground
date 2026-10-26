@@ -1,10 +1,35 @@
 use sdl3::{
     Sdl,
-    gpu::{Device, ShaderFormat, TextureFormat},
+    gpu::{Device, TextureFormat},
+    properties::{Properties, Setter},
+    sys,
     video::Window,
 };
 
 use crate::render::resource_cache::ResourceCache;
+
+pub const DEPTH_FORMAT: TextureFormat = TextureFormat::D32Float;
+
+/// `VK_MAKE_API_VERSION(0, 1, 2, 0)`. Vulkan 1.2 is the first version that
+/// allows SPIR-V 1.5 shaders.
+const VULKAN_API_VERSION_1_2: u32 = (1 << 22) | (2 << 12);
+
+fn create_device(debug_mode: bool) -> anyhow::Result<Device> {
+    let props = Properties::new()?;
+    let mut vulkan = sys::gpu::SDL_GPUVulkanOptions {
+        vulkan_api_version: VULKAN_API_VERSION_1_2,
+        ..Default::default()
+    };
+
+    props.set("SDL.gpu.device.create.shaders.spirv", true)?;
+    props.set("SDL.gpu.device.create.debugmode", debug_mode)?;
+    props.set(
+        "SDL.gpu.device.create.vulkan.options",
+        std::ptr::from_mut(&mut vulkan),
+    )?;
+
+    Ok(Device::new_with_properties(props)?)
+}
 
 pub struct RenderContextConfig {
     pub title: String,
@@ -13,16 +38,13 @@ pub struct RenderContextConfig {
 }
 
 pub struct RenderContext {
-    // Declared first so cached GPU resources drop before the device they belong to.
+    // Fields drop in declaration order, so each one must come before anything it depends on:
+    // cached resources -> device (releases the window claim and swapchain) -> window -> SDL.
     pub resources: ResourceCache,
-    pub sdl_context: Sdl,
-    pub window: Window,
     pub device: Device,
     pub swapchain_texture_format: TextureFormat,
-    pub window_width: u32,
-    pub window_height: u32,
-    pub width: u32,
-    pub height: u32,
+    pub window: Window,
+    pub sdl_context: Sdl,
 }
 
 impl RenderContext {
@@ -36,26 +58,19 @@ impl RenderContext {
         let window = video_subsystem
             .window(&config.title, config.window_width, config.window_height)
             .position_centered()
+            .resizable()
             .build()?;
 
         // Create GPU device & claim window for the GPU swapchain
-        let shader_formats = ShaderFormat::SPIRV;
-        let device = Device::new(shader_formats, true)?.with_window(&window)?;
+        let device = create_device(true)?.with_window(&window)?;
         let swapchain_texture_format = device.get_swapchain_texture_format(&window);
-
-        // Get actual dimensions of the window
-        let (width, height) = window.size_in_pixels();
 
         Ok(Self {
             resources: ResourceCache::default(),
-            sdl_context,
-            window,
             device,
             swapchain_texture_format,
-            window_width: config.window_width,
-            window_height: config.window_height,
-            width,
-            height,
+            window,
+            sdl_context,
         })
     }
 }

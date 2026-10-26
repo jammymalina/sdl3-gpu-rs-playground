@@ -114,7 +114,7 @@ impl<'a> MemAllocator<'a> {
             position_buffer,
             attribute_buffer,
             index_buffer,
-            index_count: idx_size.try_into()?,
+            index_count: mesh.indices.len().try_into()?,
         })
     }
 }

@@ -59,6 +59,7 @@ pub enum SceneError {
 pub struct Scene {
     nodes: SlotMap<NodeKey, Node>,
     main_light: MainLight,
+    clear_color: [f32; 4],
 }
 
 impl Default for Scene {
@@ -66,6 +67,7 @@ impl Default for Scene {
         Self {
             nodes: SlotMap::with_key(),
             main_light: MainLight::None,
+            clear_color: [0.0; 4],
         }
     }
 }
@@ -73,6 +75,20 @@ impl Default for Scene {
 impl Scene {
     pub const fn set_main_light(&mut self, light: MainLight) {
         self.main_light = light;
+    }
+
+    pub const fn set_clear_color(&mut self, color: [f32; 4]) {
+        self.clear_color = color;
+    }
+
+    #[must_use]
+    pub const fn main_light(&self) -> MainLight {
+        self.main_light
+    }
+
+    #[must_use]
+    pub const fn clear_color(&self) -> [f32; 4] {
+        self.clear_color
     }
 
     pub fn spawn_node(&mut self, mut node: Node) -> NodeKey {

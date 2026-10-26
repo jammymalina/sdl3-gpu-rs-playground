@@ -155,5 +155,5 @@ pub struct Mesh {
     pub position_buffer: Buffer,
     pub attribute_buffer: Buffer,
     pub index_buffer: Buffer,
-    pub index_count: u16,
+    pub index_count: u32,
 }

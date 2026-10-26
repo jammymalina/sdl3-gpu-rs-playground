@@ -50,6 +50,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cast"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
+
+[[package]]
 name = "glam"
 version = "0.34.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -115,6 +121,7 @@ dependencies = [
  "anyhow",
  "approx",
  "bytemuck",
+ "cast",
  "glam",
  "sdl3",
  "slotmap",

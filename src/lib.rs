@@ -9,6 +9,7 @@
 
 pub mod assets;
 pub mod camera;
+pub mod color;
 pub mod geom;
 pub mod gpu;
 pub mod light;

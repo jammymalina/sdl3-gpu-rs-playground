@@ -23,7 +23,7 @@ use crate::math::Transform;
 /// [`Camera::update_projection_matrix`], then read
 /// [`Camera::projection_matrix`], [`Camera::projection_matrix_inverse`] and
 /// [`Camera::view_matrix`] — or the derived [`Camera::world_to_clip`] when
-/// the renderer wants the matrix product precombined.
+/// the renderer wants the matrix product pre-combined.
 pub trait Camera {
     /// Recompute the projection matrices from the camera's current
     /// parameters.

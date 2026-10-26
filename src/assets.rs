@@ -36,42 +36,19 @@ impl<K: Key, T> Default for Repository<K, T> {
 
 impl<K: Key, T> Repository<K, T> {
     /// Store `resource` and return its key.
-    fn insert(&mut self, resource: T) -> K {
+    pub fn insert(&mut self, resource: T) -> K {
         self.slots.insert(resource)
     }
 
     /// Fetch a reference by key.
     #[must_use]
-    fn get(&self, key: K) -> Option<&T> {
+    pub fn get(&self, key: K) -> Option<&T> {
         self.slots.get(key)
     }
 
     /// Remove and return a resource by key; afterwards the key is invalid.
     fn remove(&mut self, key: K) -> Option<T> {
         self.slots.remove(key)
-    }
-
-    /// Whether `key` can be resolved into a stored resource.
-    #[must_use]
-    fn contains(&self, key: K) -> bool {
-        self.slots.contains_key(key)
-    }
-
-    /// Iterate `(key, resource)` pairs in storage order.
-    fn iter(&self) -> impl Iterator<Item = (K, &T)> + '_ {
-        self.slots.iter()
-    }
-
-    /// Number of stored resources.
-    #[must_use]
-    fn len(&self) -> usize {
-        self.slots.len()
-    }
-
-    /// Whether no resource is stored.
-    #[must_use]
-    fn is_empty(&self) -> bool {
-        self.slots.is_empty()
     }
 }
 

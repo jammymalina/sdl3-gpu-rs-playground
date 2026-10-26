@@ -85,7 +85,8 @@ pub fn get(key: &str) -> Option<&'static Shader> {
 #[must_use]
 pub fn find_stage(name: &str, stage: &str) -> Option<&'static Shader> {
     let stage = canonical_stage(stage)?;
-    ALL.iter().find(|shader| shader.name == name && shader.stage == stage)
+    ALL.iter()
+        .find(|shader| shader.name == name && shader.stage == stage)
 }
 
 #[cfg(test)]

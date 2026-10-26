@@ -12,6 +12,7 @@ categories = ["game-development", "graphics", "rendering::engine"]
 [dependencies]
 anyhow = "1.0.104"
 bytemuck = { version = "1.25.2", features = ["derive"] }
+cast = "0.3.0"
 glam = { version = "0.34.1", features = ["approx-05"] }
 sdl3 = "0.20.0"
 slotmap = "1.1.1"
