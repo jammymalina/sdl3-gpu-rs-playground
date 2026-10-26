@@ -7,6 +7,7 @@ use slotmap::{SlotMap, new_key_type};
 use thiserror::Error;
 
 use crate::assets::{MaterialKey, MeshKey};
+use crate::light::MainLight;
 use crate::math::Transform;
 
 new_key_type! {
@@ -57,17 +58,23 @@ pub enum SceneError {
 
 pub struct Scene {
     nodes: SlotMap<NodeKey, Node>,
+    main_light: MainLight,
 }
 
 impl Default for Scene {
     fn default() -> Self {
         Self {
             nodes: SlotMap::with_key(),
+            main_light: MainLight::None,
         }
     }
 }
 
 impl Scene {
+    pub const fn set_main_light(&mut self, light: MainLight) {
+        self.main_light = light;
+    }
+
     pub fn spawn_node(&mut self, mut node: Node) -> NodeKey {
         node.parent = None;
         node.children.clear();

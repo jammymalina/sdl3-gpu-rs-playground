@@ -10,6 +10,9 @@
 pub mod assets;
 pub mod camera;
 pub mod geom;
+pub mod gpu;
+pub mod light;
+pub mod material;
 pub mod math;
 pub mod mesh;
 pub mod render;

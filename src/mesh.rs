@@ -1,5 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use glam::{Vec2, Vec3};
+use sdl3::gpu::Buffer;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, Pod, Zeroable)]
@@ -148,4 +149,11 @@ impl MeshData {
             self.attributes[i].tangent = [t_ortho.x, t_ortho.y, t_ortho.z, w];
         }
     }
+}
+
+pub struct Mesh {
+    pub position_buffer: Buffer,
+    pub attribute_buffer: Buffer,
+    pub index_buffer: Buffer,
+    pub index_count: u16,
 }
