@@ -17,7 +17,7 @@
 //!
 //! 1. the `SLANGC` environment variable,
 //! 2. `slangc` on `PATH`,
-//! 3. well-known install locations (Arch's `shader-slang-bin`, the Vulkan SDK).
+//! 3. well-known install locations (see [`SLANGC_HINTS`]).
 
 // This is build tooling, not library code - opt out of the crate's strict
 // pedantic/nursery clippy lints.
@@ -61,7 +61,7 @@ const SLANGC_HINTS: &[&str] = &[
     "/opt/shader-slang-bin/bin/slangc",
     // Arch AUR: shader-slang
     "/opt/shader-slang/bin/slangc",
-    // Vulkan SDK
+    // Manual install
     "/usr/local/bin/slangc",
 ];
 
@@ -107,7 +107,9 @@ fn main() {
     });
 
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
+    // Start from a clean slate so blobs of deleted or renamed shaders don't linger.
     let spv_dir = out_dir.join("shaders");
+    let _ = fs::remove_dir_all(&spv_dir);
     fs::create_dir_all(&spv_dir).expect("failed to create shader output directory");
 
     // Debug builds keep debug info and skip optimization; release builds optimize.
@@ -304,13 +306,29 @@ fn entry_points(src: &str) -> Vec<EntryPoint> {
 }
 
 /// Remove `// ...` and `/* ... */` comments so attribute scanning never treats
-/// commented-out shader annotations as entries.
+/// commented-out shader annotations as entries. String literals are copied
+/// verbatim, so a `//` inside `"http://..."` is not mistaken for a comment.
 fn strip_comments(src: &str) -> String {
     let mut out = String::with_capacity(src.len());
     let mut chars = src.chars().peekable();
 
     while let Some(ch) = chars.next() {
         match ch {
+            '"' => {
+                out.push('"');
+                while let Some(c) = chars.next() {
+                    out.push(c);
+                    match c {
+                        '\\' => {
+                            if let Some(escaped) = chars.next() {
+                                out.push(escaped);
+                            }
+                        }
+                        '"' | '\n' => break,
+                        _ => {}
+                    }
+                }
+            }
             '/' if chars.peek() == Some(&'/') => {
                 // Keep the newline so error positions stay aligned.
                 for c in chars.by_ref() {
@@ -399,6 +417,11 @@ fn compile(slangc: &Path, src: &Path, out: &Path, stage: &str, entrypoint: &str,
             String::from_utf8_lossy(&output.stderr),
         );
     }
+
+    // Surface successful-build diagnostics (e.g. `E39029`) in cargo's output.
+    for line in String::from_utf8_lossy(&output.stderr).lines().filter(|l| !l.trim().is_empty()) {
+        println!("cargo:warning={line}");
+    }
 }
 
 /// Generate `$OUT_DIR/shaders.rs`: one `&[u8]` constant per compiled entry
@@ -414,9 +437,9 @@ fn write_manifest(out_dir: &Path, compiled: &[Compiled]) {
          \x20   /// `<name>.<stage>`, e.g. `\"flat_color.vertex\"`.\n\
          \x20   pub key: &'static str,\n\
          \x20   /// Path of the source file below `shaders/` without extension, e.g.\n\
-         \x20   /// `\"flat_color\"`.\n\
+         \x20   /// `\"flat_color\"` or `\"lights/point_lit\"`.\n\
          \x20   pub name: &'static str,\n\
-         \x20   /// Slang stage from the entry point's `[shader(\"...\")]` attribute,\n\
+         \x20   /// Canonical Slang stage (`[shader(\"pixel\")]` is stored as `\"fragment\"`),\n\
          \x20   /// e.g. `\"vertex\"`, `\"geometry\"`, `\"fragment\"`.\n\
          \x20   pub stage: &'static str,\n\
          \x20   /// Name of the annotated entry-point function.\n\
@@ -438,6 +461,16 @@ fn write_manifest(out_dir: &Path, compiled: &[Compiled]) {
             stage = c.stage,
         );
     }
+
+    rs.push_str(
+        "/// Every accepted `[shader(\"...\")]` stage spelling and the canonical stage it maps to\n\
+         /// (e.g. `(\"pixel\", \"fragment\")`).\n\
+         pub static STAGE_ALIASES: &[(&str, &str)] = &[\n",
+    );
+    for (alias, canonical) in STAGES {
+        let _ = writeln!(rs, "    ({alias:?}, {canonical:?}),");
+    }
+    rs.push_str("];\n\n");
 
     rs.push_str("/// Every compiled shader entry point.\npub static ALL: &[Shader] = &[\n");
     for c in compiled {

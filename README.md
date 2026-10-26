@@ -21,16 +21,13 @@ ConstantBuffer<ObjectData> object : register(b1);
 ConstantBuffer<BasicColorData> color : register(b2);
 
 struct VertexInput { /* ... */ }
+struct VertexOutput { /* ... */ }
 
 [shader("vertex")]
 VertexOutput vertex_main(VertexInput input) { /* ... */ }
 
-[shader("geometry")]
-[maxvertexcount(3)]
-void geom_main(triangle VertexOutput input[3], inout TriangleStream<GeomOutput> out_stream) { /* ... */ }
-
 [shader("fragment")]
-GeometricOutput fragment_main(GeomOutput input) { /* ... */ }
+float4 frag_main(VertexOutput input) : SV_Target { /* ... */ }
 ```
 
 Entry-point names are free-form (they don't have to be `main`); `build.rs`
@@ -43,8 +40,8 @@ pipeline:
 ```
 shaders/
 ├── common_types.slang   # module: shared types, no entry points
-├── flat_color.slang     # vertex + geometry (all stages in one file)
-└── lit/                 # just grouping
+├── flat_color.slang     # vertex + fragment (all stages in one file)
+└── lit/                 # just grouping (illustrative: not in the repo yet)
     └── blinn.slang
 ```
 
@@ -81,11 +78,33 @@ slangc shaders/flat_color.slang -target spirv \
 ```
 
 * one SPIR-V blob per shader-stage: `$OUT_DIR/shaders/flat_color.vertex.spv`
-  and `flat_color.geometry.spv` for the file above,
+  and `flat_color.fragment.spv` for the file above. The key and file name always
+  use the **canonical** stage, so `[shader("pixel")]` produces `*.fragment.spv`,
 * `-g -O0` in debug builds, `-O3` in release builds,
+* `slangc` warnings from successful compiles are forwarded to cargo as
+  `cargo:warning`s (e.g. `E39029`, see below),
 * the blobs are embedded into the crate through the generated
   `$OUT_DIR/shaders.rs` which `src/shaders.rs` includes. Editing a `.slang`
-  file and rerunning `cargo build` recompiles — no manual step.
+  file and rerunning `cargo build` recompiles — no manual step. Blobs of deleted
+  or renamed shaders are removed on each build.
+
+Accepted `[shader("...")]` stage names and their canonical stage:
+
+| Attribute value                      | Canonical stage |
+| ------------------------------------ | --------------- |
+| `vertex`                             | `vertex`        |
+| `fragment`, `pixel`                  | `fragment`      |
+| `geometry`                           | `geometry`      |
+| `hull`, `tesscontrol`                | `hull`          |
+| `domain`, `tesseval`                 | `domain`        |
+| `compute`                            | `compute`       |
+| `mesh`                               | `mesh`          |
+| `amplification`, `task`              | `amplification` |
+| `raygeneration`, `intersection`, `anyhit`, `closesthit`, `miss`, `callable` | same name |
+
+Any spelling in this table is accepted everywhere a stage is taken: in the
+attribute, in `shaders::find_stage` / `shaders::get`, and in
+`shaders::canonical_stage`.
 
 ### Using the compiled shaders from Rust
 
@@ -95,28 +114,41 @@ name, stage, entrypoint, bytes }` record, keyed by
 
 | Source file      | Entry point      | Key                  | Constant            |
 | ---------------- | ---------------- | -------------------- | ------------------- |
-| `flat_color.slang` | `vertex_main`  | `flat_color.vertex`  | `FLAT_COLOR_VERTEX` |
-| `flat_color.slang` | `geom_main`    | `flat_color.geometry`| `FLAT_COLOR_GEOMETRY` |
+| `flat_color.slang` | `vertex_main` | `flat_color.vertex`   | `FLAT_COLOR_VERTEX`   |
+| `flat_color.slang` | `frag_main`   | `flat_color.fragment` | `FLAT_COLOR_FRAGMENT` |
 
 ```rust
-use sdl3::gpu::{ShaderFormat, ShaderStage};
+use anyhow::Context;
+use sdl3::gpu::ShaderFormat;
 
-let vs = shaders::find_stage("flat_color", "vertex")?;
+let vs = shaders::find_stage("flat_color", "vertex")
+    .context("flat_color.vertex missing from the manifest")?;
 let vertex_shader = device
     .create_shader()
-    .with_code(ShaderFormat::SPIRV, vs.bytes, vs.sdl_stage()?)
+    .with_code(
+        ShaderFormat::SPIRV,
+        vs.bytes,
+        vs.sdl_stage().context("vertex stage has no SDL ShaderStage")?,
+    )
     .with_entrypoint(&vs.entrypoint_cstring())
     .build()?;
 ```
 
+`find_stage` and `get` return `Option<&'static Shader>`, so convert `None`
+into an error with `.context(...)` (or `ok_or`) as above.
+
 * `shaders::find_stage("flat_color", "vertex")` — by source name and stage,
-* `shaders::get("flat_color.vertex")` — by key,
-* `shaders::FLAT_COLOR_VERTEX`, `shaders::FLAT_COLOR_GEOMETRY` — plain byte
+  any stage spelling from the table above works (`"pixel"` finds the fragment entry),
+* `shaders::get("flat_color.vertex")` — by key (`<name>.<canonical stage>`),
+  also accepts an alias or a trailing `.spv`,
+* `shaders::canonical_stage("pixel")` — alias to canonical stage (`Some("fragment")`),
+* `shaders::FLAT_COLOR_VERTEX`, `shaders::FLAT_COLOR_FRAGMENT` — plain byte
   constants also exist per compiled entry point,
-* `Shader::sdl_stage()` maps `vertex`/`fragment` to SDL3's `ShaderStage`.
-  Stages SDL GPU's shader API can't consume (`geometry`, `hull`, `domain`,
-  `mesh`, ...) still compile and are embedded, but no pipeline can be built
-  from them through `create_shader`.
+* `Shader::stage` is always the canonical stage; `Shader::sdl_stage()` maps
+  `vertex` and `fragment` to SDL3's `ShaderStage` and returns `None` for
+  anything else. Stages SDL GPU's shader API can't consume (`geometry`, `hull`,
+  `domain`, `mesh`, ...) still compile and are embedded, but no pipeline can be
+  built from them through `create_shader`.
 
 ### Requirements
 
@@ -124,8 +156,10 @@ let vertex_shader = device
 
 1. the `SLANGC` environment variable,
 2. `slangc` on `PATH`,
-3. well-known install locations such as `/opt/shader-slang-bin/bin/slangc`
-   (Arch `shader-slang-bin`) and `/opt/shader-slang/bin/slangc`.
+3. well-known install locations, in order:
+   `/opt/shader-slang-bin/bin/slangc` (Arch `shader-slang-bin`),
+   `/opt/shader-slang/bin/slangc` (Arch `shader-slang`), and
+   `/usr/local/bin/slangc` (manual install).
 
 On Arch, install it with:
 

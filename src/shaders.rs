@@ -37,14 +37,14 @@ include!(concat!(env!("OUT_DIR"), "/shaders.rs"));
 
 impl Shader {
     /// SDL3 [`ShaderStage`] for this entry point, i.e. the stage classes SDL
-    /// GPU's `create_shader` API accepts: `vertex` and `fragment`. Other
-    /// stages (`geometry`, `hull`, `domain`, ...) compile and are embedded,
-    /// but SDL GPU pipelines cannot consume them directly.
+    /// GPU's `create_shader` API accepts: `vertex` and `fragment` (`pixel` is
+    /// an alias of `fragment`). Other stages (`geometry`, `hull`, `domain`, ...)
+    /// compile and are embedded, but SDL GPU pipelines cannot consume them directly.
     #[must_use]
     pub fn sdl_stage(&self) -> Option<ShaderStage> {
         match self.stage {
             "vertex" => Some(ShaderStage::Vertex),
-            "fragment" | "pixel" => Some(ShaderStage::Fragment),
+            "fragment" => Some(ShaderStage::Fragment),
             _ => None,
         }
     }
@@ -60,17 +60,62 @@ impl Shader {
     }
 }
 
+/// Canonical Slang stage for any accepted `[shader("...")]` spelling, e.g.
+/// `canonical_stage("pixel") == Some("fragment")`. `None` for unknown stages.
+#[must_use]
+pub fn canonical_stage(stage: &str) -> Option<&'static str> {
+    STAGE_ALIASES
+        .iter()
+        .find_map(|(alias, canonical)| (*alias == stage).then_some(*canonical))
+}
+
 /// Look up a compiled entry point by key (`"<name>.<stage>"`, e.g.
-/// `get("flat_color.vertex")`; a trailing `.spv` is tolerated).
+/// `get("flat_color.vertex")`). The stage may use any alias (`"flat_color.pixel"`),
+/// and a trailing `.spv` is tolerated.
 #[must_use]
 pub fn get(key: &str) -> Option<&'static Shader> {
     let key = key.strip_suffix(".spv").unwrap_or(key);
-    ALL.iter().find(|shader| shader.key == key)
+    let (name, stage) = key.rsplit_once('.')?;
+    find_stage(name, stage)
 }
 
 /// Find a compiled entry point by source name and Slang stage, e.g.
-/// `find_stage("flat_color", "vertex")`.
+/// `find_stage("flat_color", "vertex")`. The stage may use any alias, so
+/// `find_stage("flat_color", "pixel")` finds the fragment entry point.
 #[must_use]
 pub fn find_stage(name: &str, stage: &str) -> Option<&'static Shader> {
+    let stage = canonical_stage(stage)?;
     ALL.iter().find(|shader| shader.name == name && shader.stage == stage)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pixel_is_an_alias_of_fragment() {
+        assert_eq!(canonical_stage("pixel"), Some("fragment"));
+        assert_eq!(canonical_stage("fragment"), Some("fragment"));
+        assert_eq!(canonical_stage("tesscontrol"), Some("hull"));
+        assert_eq!(canonical_stage("bogus"), None);
+    }
+
+    #[test]
+    fn lookups_accept_aliases() {
+        let fragment = find_stage("flat_color", "fragment").expect("flat_color.fragment");
+
+        assert_eq!(find_stage("flat_color", "pixel"), Some(fragment));
+        assert_eq!(get("flat_color.fragment"), Some(fragment));
+        assert_eq!(get("flat_color.pixel"), Some(fragment));
+        assert_eq!(get("flat_color.pixel.spv"), Some(fragment));
+        assert_eq!(get("flat_color.bogus"), None);
+    }
+
+    #[test]
+    fn fragment_stage_maps_to_sdl_fragment() {
+        let fragment = find_stage("flat_color", "pixel").expect("flat_color.fragment");
+
+        assert_eq!(fragment.stage, "fragment");
+        assert!(matches!(fragment.sdl_stage(), Some(ShaderStage::Fragment)));
+    }
 }
